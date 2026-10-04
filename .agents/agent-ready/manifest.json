@@ -12,7 +12,6 @@
     {"path": ".clang-format", "kind": "project-config", "ownership": "owner-managed"},
     {"path": ".gitignore", "kind": "project-config", "ownership": "owner-managed"},
     {"path": "AGENTS.md", "kind": "agent-router", "ownership": "owner-managed"},
-    {"path": "Brewfile", "kind": "dependency-manifest", "ownership": "owner-managed"},
     {"path": "CMakeLists.txt", "kind": "build-config", "ownership": "owner-managed"},
     {"path": "CMakePresets.json", "kind": "build-config", "ownership": "owner-managed"},
     {"path": "README.md", "kind": "human-doc", "ownership": "owner-managed"},
@@ -24,13 +23,14 @@
       "path": ".agents/scripts/preflight.py",
       "kind": "helper",
       "ownership": "generator-managed",
-      "baseline_sha256": "bda04727e07f8b9f14996329f0fe6e3c2146af5dcb379cc3bdd220ae64c3a17d"
+      "baseline_sha256": "b833f66380f9db9feaf856b54d5dcb89e13690cbd528f9ade6453141ffc6ba19"
     },
+    {"path": ".agents/scripts/preflight.ps1", "kind": "helper", "ownership": "owner-managed"},
     {
       "path": ".agents/agent-ready/evidence.yaml",
       "kind": "evidence-ledger",
       "ownership": "generator-managed",
-      "baseline_sha256": "acadf08b33c435a8134fb9a7a1e0efa06f2278369ffecfc70255f44117e747f0"
+      "baseline_sha256": "13299810eed3fbb5687355f70302349e744eafc4830a8c8e73a5ae4c2d5aaf7d"
     },
     {
       "path": ".agents/agent-ready/state/bootstrap.json",

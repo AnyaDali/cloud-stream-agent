@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Build a macOS-first C++20 client/server video-streaming demo and a separate
+Build a Windows-only C++20 client/server video-streaming demo and a separate
 agent harness that verifies the stream from observable client evidence.
 
 ## Read first
@@ -15,18 +15,20 @@ agent harness that verifies the stream from observable client evidence.
 ## Common commands
 
 ```sh
-python3 .agents/scripts/preflight.py
+powershell -NoProfile -ExecutionPolicy Bypass -File .agents/scripts/preflight.ps1
 cmake --preset debug
-cmake --build --preset debug
-ctest --preset debug
+cmake --build --preset debug --target stream-server stream-client
 ```
+
+Run the CMake commands in the MSYS2 UCRT64 shell. The current milestone is
+build only: do not add or run tests until the user asks to resume test work.
 
 ## Invariants
 
 1. The server owns capture and encoding; the client owns decoding, rendering,
    stream metrics, and the latest-frame artifact.
-2. Platform APIs stay behind adapters. macOS-specific sources use `.mm` and
-   live under a `mac` path or carry a `_mac` suffix.
+2. The project targets Windows 10/11 only. Windows capture code lives under a
+   `windows` path; do not add unused cross-platform capture abstractions.
 3. Never send C++ structs directly over the network. Serialize fixed-width
    integers explicitly in network byte order and validate lengths before
    allocation.
@@ -53,10 +55,11 @@ ctest --preset debug
 | Add server capture/encoding | `src/server/`, future `src/capture/`, `src/media/` | focused unit test + local stream smoke test |
 | Add client decode/render | `src/client/`, future `src/media/` | focused unit test + local stream smoke test |
 | Add agent tool/API | future `agent/` and client observability API | deterministic fixture/eval + API test |
-| Update dependencies | `Brewfile`, CMake config | preflight + configure/build/test |
+| Update dependencies | MSYS2 package list in `.agents/docs/development.md`, CMake config | preflight + configure/build |
 
 ## Completion
 
 Update relevant Russian documentation when contracts, commands, or boundaries
-change. Run the strongest available verification tier and state exactly what was
-not run. Keep commits and PR creation human-approved.
+change. For the current milestone, verify that `stream-server.exe` and
+`stream-client.exe` build and state that tests were intentionally not run. Keep
+commits and PR creation human-approved.

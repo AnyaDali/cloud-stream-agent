@@ -1,6 +1,5 @@
 /build/
 /.cache/
-/.DS_Store
 compile_commands.json
 *.log
 *.mp4
@@ -8,3 +7,4 @@ compile_commands.json
 *.jpg
 *.pyc
 __pycache__/
+/runtime/

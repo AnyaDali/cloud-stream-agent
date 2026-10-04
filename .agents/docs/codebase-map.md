@@ -15,7 +15,7 @@
 
 Запланированные области создаются только вместе с рабочим кодом:
 
-- `src/capture/mac/` — адаптер ScreenCaptureKit;
+- `src/capture/windows/` — Windows Graphics Capture и выбор окна;
 - `src/media/` — FFmpeg encoder/decoder и ограниченная очередь кадров;
 - `src/observability/` — метрики и локальный API клиента;
 - `agent/` — harness, tools и evals.

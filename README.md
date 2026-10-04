@@ -4,10 +4,10 @@
 которая проверяет поступление кадров, описывает последний кадр и сообщает метрики
 потока.
 
-Проект ориентирован на macOS 26 на Apple Silicon. Захват выбранного окна будет
-реализован через ScreenCaptureKit, кодирование и декодирование — через FFmpeg,
-показ видео — через SDL3. Транспорт использует собственный бинарный протокол
-поверх TCP.
+Проект ориентирован на Windows 10/11 x64. Захват выбранного окна будет
+реализован через Windows Graphics Capture, кодирование и декодирование — через
+FFmpeg, показ видео — через SDL3. TCP используется для управления сессией,
+видеоданные будут передаваться по собственному протоколу поверх UDP.
 
 ## Текущее состояние
 
@@ -19,42 +19,51 @@
 Захват окна, H.264, SDL3-рендеринг и агентский harness добавляются следующими
 итерациями.
 
-## Подготовка окружения
+## Подготовка окружения Windows
 
-Проверить уже установленные инструменты без изменения системы:
+Установить [MSYS2](https://www.msys2.org/) в стандартный каталог `C:\msys64`,
+открыть **MSYS2 UCRT64** и установить минимальный toolchain:
 
 ```sh
-python3 .agents/scripts/preflight.py
+pacman -S --needed mingw-w64-ucrt-x86_64-gcc \
+  mingw-w64-ucrt-x86_64-cmake \
+  mingw-w64-ucrt-x86_64-ninja \
+  mingw-w64-ucrt-x86_64-asio
 ```
 
-Установить зависимости после просмотра `Brewfile`:
+Проверить окружение без изменения системы можно из PowerShell:
 
-```sh
-brew bundle
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .agents/scripts/preflight.ps1
 ```
 
 ## Сборка и тесты
 
+Команды выполняются в **MSYS2 UCRT64** из корня репозитория:
+
 ```sh
 cmake --preset debug
-cmake --build --preset debug
-ctest --preset debug
+cmake --build --preset debug --target stream-server stream-client
 ```
+
+Текущий этап проверяет только сборку `stream-server.exe` и
+`stream-client.exe`. Автоматические тесты временно не запускаются и новые тесты
+не добавляются до отдельного согласования.
 
 Запуск текущих приложений:
 
 ```sh
-./build/debug/stream-server 9010 120 33
-./build/debug/stream-client 127.0.0.1 9010 /tmp/cloud-stream-agent/latest-frame.ppm
+./build/debug/stream-server.exe 9010 120 33
+./build/debug/stream-client.exe 127.0.0.1 9010 \
+  "$LOCALAPPDATA/cloud-stream-agent/latest-frame.ppm"
 ```
 
 Аргументы сервера: `port`, число кадров, интервал между ними в миллисекундах и
 необязательный bind address. По умолчанию сервер слушает только loopback.
 Метрики клиента сохраняются рядом с кадром в `stream-metrics.json`.
 
-Перед первым захватом macOS запросит разрешение **Screen & System Audio
-Recording** для Terminal или приложения, из которого запущен сервер. После
-выдачи разрешения может потребоваться перезапуск процесса.
+Захват окна, H.264, UDP video plane и SDL3 пока не реализованы. На текущем этапе
+сервер генерирует synthetic RGB24-кадры и передаёт их клиенту по TCP.
 
 ## Документация
 

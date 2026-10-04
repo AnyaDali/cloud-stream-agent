@@ -1,14 +1,14 @@
 schema_version: 1
 facts:
   - kind: platform
-    value: macOS 26.2 on Apple Silicon
+    value: Windows 10/11 x64 with MSYS2 UCRT64
     confidence: confirmed
     sources:
       - type: interview
-        pointer: candidate environment stated in the planning conversation
+        pointer: approved Windows-only implementation plan
       - type: config
-        pointer: .agents/scripts/preflight.py
-    refresh_recipe: python3 .agents/scripts/preflight.py
+        pointer: .agents/scripts/preflight.ps1
+    refresh_recipe: powershell -NoProfile -ExecutionPolicy Bypass -File .agents/scripts/preflight.ps1
   - kind: language
     value: C++20
     confidence: confirmed
@@ -17,7 +17,7 @@ facts:
         pointer: CMakeLists.txt
     refresh_recipe: inspect CMAKE_CXX_STANDARD and source files
   - kind: architecture
-    value: macOS ScreenCaptureKit, FFmpeg, SDL3, custom protocol over TCP
+    value: Windows Graphics Capture, FFmpeg, SDL3, TCP control plane and UDP video plane
     confidence: confirmed
     sources:
       - type: interview
@@ -26,9 +26,9 @@ facts:
         pointer: .agents/docs/architecture.md
     refresh_recipe: compare CMake targets, source entry points, and architecture document
   - kind: command
-    value: cmake --preset debug && cmake --build --preset debug && ctest --preset debug
+    value: cmake --preset debug && cmake --build --preset debug --target stream-server stream-client
     confidence: confirmed
     sources:
       - type: config
         pointer: CMakePresets.json
-    refresh_recipe: inspect CMakePresets.json and execute the three commands
+    refresh_recipe: inspect CMakePresets.json and execute configure plus the two-target build

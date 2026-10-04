@@ -1,14 +1,27 @@
 #!/usr/bin/env python3
 
 import json
+import os
 import platform
 import shutil
 import subprocess
+from pathlib import Path
 from typing import Optional
 
 
-def version(command: str, *args: str) -> Optional[str]:
+UCRT64_BIN = Path(os.environ.get("MSYSTEM_PREFIX", r"C:\msys64\ucrt64")) / "bin"
+
+
+def find_command(command: str) -> Optional[str]:
     path = shutil.which(command)
+    if path is not None:
+        return path
+    candidate = UCRT64_BIN / f"{command}.exe"
+    return str(candidate) if candidate.is_file() else None
+
+
+def version(command: str, *args: str) -> Optional[str]:
+    path = find_command(command)
     if path is None:
         return None
     try:
@@ -26,14 +39,13 @@ def version(command: str, *args: str) -> Optional[str]:
 
 
 def main() -> int:
-    macos_version = version("sw_vers", "-productVersion")
     commands = {
-        "clang++": version("clang++", "--version"),
+        "gcc": version("gcc", "--version"),
+        "g++": version("g++", "--version"),
         "cmake": version("cmake", "--version"),
         "ninja": version("ninja", "--version"),
         "pkg-config": version("pkg-config", "--version"),
         "ffmpeg": version("ffmpeg", "-version"),
-        "python3.11": version("python3.11", "--version"),
         "pkg:asio": version("pkg-config", "--modversion", "asio"),
         "pkg:libavcodec": version("pkg-config", "--modversion", "libavcodec"),
         "pkg:sdl3": version("pkg-config", "--modversion", "sdl3"),
@@ -43,8 +55,10 @@ def main() -> int:
         "read_only": True,
         "platform": {
             "system": platform.system(),
-            "release": macos_version or platform.mac_ver()[0] or platform.release(),
+            "release": platform.win32_ver()[1] or platform.release(),
             "machine": platform.machine(),
+            "toolchain": "MSYS2 UCRT64",
+            "toolchain_root": str(UCRT64_BIN.parent),
         },
         "capabilities": {
             name: {
@@ -54,10 +68,14 @@ def main() -> int:
             for name, detected in commands.items()
         },
         "next": {
-            "install": "brew bundle",
+            "install": (
+                "pacman -S --needed mingw-w64-ucrt-x86_64-gcc "
+                "mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja "
+                "mingw-w64-ucrt-x86_64-asio"
+            ),
             "configure": "cmake --preset debug",
-            "build": "cmake --build --preset debug",
-            "test": "ctest --preset debug",
+            "build": "cmake --build --preset debug --target stream-server stream-client",
+            "test": "deferred by current milestone",
         },
     }
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))

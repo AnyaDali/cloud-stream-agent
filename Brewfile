@@ -1,7 +1,0 @@
-brew "cmake"
-brew "ninja"
-brew "pkgconf"
-brew "ffmpeg"
-brew "sdl3"
-brew "asio"
-brew "python@3.11"
