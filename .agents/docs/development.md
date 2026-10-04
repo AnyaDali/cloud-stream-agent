@@ -46,11 +46,10 @@ latest-frame. Проверки Windows Graphics Capture будут выполн�
 среде агента тесту может потребоваться разрешение на создание loopback-сокета.
 
 Серверные accept, exact read/write и ожидание нового кадра используют
-`asio::awaitable` и C++20 coroutines. `ClientRegistry`, все session state,
-cursors и общий `BroadcastBuffer` выполняются на отдельном `asio::strand`
-поверх общего `io_context`; capture/encode разделены bounded queue и отдельным
-encoder worker. Клиентский connect/read остаётся синхронным до этапа UDP
-receive/reassembly.
+`asio::awaitable` и C++20 coroutines. Все сетевые session state и cursors пока
+выполняются на одном `io_context`; capture/encode разделены bounded queue и
+отдельным encoder worker. Клиентский connect/read остаётся синхронным до этапа
+UDP receive/reassembly.
 
 ## Секреты
 

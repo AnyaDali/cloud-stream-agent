@@ -41,12 +41,6 @@ coroutine-сессии. На текущем этапе поддерживает�
 video plane. Текущий synthetic-срез пока передаёт RAW_RGB24 по TCP и будет
 заменён после фиксации protocol v2.
 
-`ClientRegistry` работает как actor на собственном `asio::strand`. Accept,
-добавление и удаление сессий, публикация и чтение `BroadcastBuffer`, а также
-изменение cursor каждой сессии сериализованы этим executor. Поэтому запуск
-общего `io_context` несколькими worker threads не создаёт гонку в registry или
-буфере и не требует mutex в горячем пути отправки.
-
 ```text
 SyntheticFrameSource / WindowsGraphicsCapture
   -> BoundedLatestQueue<RawFrame>

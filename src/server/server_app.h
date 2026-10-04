@@ -60,7 +60,6 @@ private:
     ClientRegistry client_registry_;
     ClientAcceptor client_acceptor_;
     std::thread encoder_thread_;
-    std::uint64_t frames_published_{0};
     bool source_started_{false};
     bool stopping_{false};
     bool stream_finished_{false};

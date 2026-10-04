@@ -2,7 +2,6 @@
 
 #include <asio/co_spawn.hpp>
 #include <asio/detached.hpp>
-#include <asio/post.hpp>
 #include <asio/redirect_error.hpp>
 #include <asio/use_awaitable.hpp>
 
@@ -31,10 +30,6 @@ void ClientAcceptor::start() {
 }
 
 void ClientAcceptor::stop() {
-    asio::post(acceptor_.get_executor(), [this] { do_stop(); });
-}
-
-void ClientAcceptor::do_stop() {
     if (stopping_) {
         return;
     }
