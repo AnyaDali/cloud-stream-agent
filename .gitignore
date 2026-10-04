@@ -1,0 +1,10 @@
+/build/
+/.cache/
+compile_commands.json
+*.log
+*.mp4
+*.h264
+*.jpg
+*.pyc
+__pycache__/
+/runtime/

@@ -1,0 +1,34 @@
+schema_version: 1
+facts:
+  - kind: platform
+    value: Windows 10/11 x64 with MSYS2 UCRT64
+    confidence: confirmed
+    sources:
+      - type: interview
+        pointer: approved Windows-only implementation plan
+      - type: config
+        pointer: .agents/scripts/preflight.ps1
+    refresh_recipe: powershell -NoProfile -ExecutionPolicy Bypass -File .agents/scripts/preflight.ps1
+  - kind: language
+    value: C++20
+    confidence: confirmed
+    sources:
+      - type: repository
+        pointer: CMakeLists.txt
+    refresh_recipe: inspect CMAKE_CXX_STANDARD and source files
+  - kind: architecture
+    value: single capture/encode pipeline, shared multi-client broadcast buffer, TCP control plane and future UDP video plane
+    confidence: confirmed
+    sources:
+      - type: interview
+        pointer: approved implementation plan
+      - type: repository
+        pointer: .agents/docs/architecture.md
+    refresh_recipe: compare CMake targets, source entry points, and architecture document
+  - kind: command
+    value: cmake --preset debug && cmake --build --preset debug --target stream-server stream-client
+    confidence: confirmed
+    sources:
+      - type: config
+        pointer: CMakePresets.json
+    refresh_recipe: inspect CMakePresets.json and execute configure plus the two-target build

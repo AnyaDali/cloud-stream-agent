@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "generator": "bootstrap-agent-ready-repo",
+  "scope": "initial local bootstrap",
+  "history_mining": false,
+  "internal_search": false,
+  "typical_task_skills": [],
+  "notes": [
+    "Repository was empty before bootstrap.",
+    "Project-local skills are deferred until recurring workflows have evidence."
+  ]
+}
