@@ -27,7 +27,7 @@ ServerApp::ServerApp(ServerConfig config)
                        config_.maximum_clients, [this] { start_source(); },
                        [this] { encoder_.request_keyframe(); }),
       client_acceptor_(
-          context_.get_executor(),
+          client_registry_.executor(),
           {asio::ip::make_address(config_.bind_address), config_.port},
           [this](asio::ip::tcp::socket socket) {
               client_registry_.start_session(std::move(socket));
@@ -99,8 +99,8 @@ void ServerApp::publish_frame(std::shared_ptr<const media::EncodedFrame> frame) 
     if (stream_finished_ || stopping_) {
         return;
     }
-    static_cast<void>(broadcast_buffer_.publish(std::move(frame)));
-    client_registry_.notify_data_available();
+    client_registry_.publish_frame(std::move(frame));
+    ++frames_published_;
 }
 
 void ServerApp::finish_stream() {
@@ -108,12 +108,11 @@ void ServerApp::finish_stream() {
         return;
     }
     stream_finished_ = true;
-    broadcast_buffer_.finish();
     client_acceptor_.stop();
-    client_registry_.notify_data_available();
+    client_registry_.finish_stream();
     std::error_code ignored;
     signals_.cancel(ignored);
-    std::cout << "stream_finished frames_published=" << broadcast_buffer_.next_sequence()
+    std::cout << "stream_finished frames_published=" << frames_published_
               << " raw_frames_dropped=" << raw_frame_queue_.dropped_count() << '\n';
 }
 
@@ -128,7 +127,6 @@ void ServerApp::stop() {
     client_registry_.stop();
     if (!stream_finished_) {
         stream_finished_ = true;
-        broadcast_buffer_.finish();
     }
     std::error_code ignored;
     signals_.cancel(ignored);

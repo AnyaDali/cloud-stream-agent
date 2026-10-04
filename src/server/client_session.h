@@ -22,7 +22,7 @@ public:
     using ClosedHandler = std::function<void(ClientId)>;
     using KeyframeRequestHandler = std::function<void()>;
 
-    ClientSession(ClientId id, asio::ip::tcp::socket socket,
+    ClientSession(ClientId id, asio::any_io_executor executor, asio::ip::tcp::socket socket,
                   pipeline::BroadcastBuffer& broadcast_buffer,
                   protocol::StreamConfigPayload stream_config, ReadyHandler on_ready,
                   ClosedHandler on_closed, KeyframeRequestHandler on_keyframe_request);
@@ -39,6 +39,7 @@ private:
     void complete();
 
     ClientId id_{0};
+    asio::any_io_executor executor_;
     asio::ip::tcp::socket socket_;
     asio::steady_timer data_available_;
     asio::steady_timer handshake_deadline_;

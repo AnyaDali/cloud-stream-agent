@@ -39,6 +39,9 @@ build only: do not add or run tests until the user asks to resume test work.
 6. Capture and encoding happen once per stream. Multiple clients read the same
    bounded broadcast buffer through independent monotonic cursors; a slow
    client must never retain the buffer or block other sessions.
+7. `ClientRegistry`, its sessions, per-client cursors, and `BroadcastBuffer`
+   access are serialized by the registry's `asio::strand`. Do not read or
+   mutate that state outside the strand.
 
 ## Safety and compatibility
 

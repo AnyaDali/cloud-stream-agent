@@ -16,13 +16,15 @@
 
 namespace cloud_stream::server {
 
-ClientSession::ClientSession(ClientId id, asio::ip::tcp::socket socket,
+ClientSession::ClientSession(ClientId id, asio::any_io_executor executor,
+                             asio::ip::tcp::socket socket,
                              pipeline::BroadcastBuffer& broadcast_buffer,
                              protocol::StreamConfigPayload stream_config, ReadyHandler on_ready,
                              ClosedHandler on_closed,
                              KeyframeRequestHandler on_keyframe_request)
-    : id_(id), socket_(std::move(socket)), data_available_(socket_.get_executor()),
-      handshake_deadline_(socket_.get_executor()), broadcast_buffer_(broadcast_buffer),
+    : id_(id), executor_(std::move(executor)), socket_(std::move(socket)),
+      data_available_(executor_), handshake_deadline_(executor_),
+      broadcast_buffer_(broadcast_buffer),
       stream_config_(std::move(stream_config)), on_ready_(std::move(on_ready)),
       on_closed_(std::move(on_closed)),
       on_keyframe_request_(std::move(on_keyframe_request)) {}
@@ -30,7 +32,7 @@ ClientSession::ClientSession(ClientId id, asio::ip::tcp::socket socket,
 void ClientSession::start() {
     auto self = shared_from_this();
     asio::co_spawn(
-        socket_.get_executor(),
+        executor_,
         [self]() -> asio::awaitable<void> {
             co_await self->run();
         },

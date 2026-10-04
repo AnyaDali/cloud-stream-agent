@@ -21,6 +21,7 @@ public:
 
 private:
     asio::awaitable<void> accept_loop();
+    void do_stop();
 
     asio::ip::tcp::acceptor acceptor_;
     AcceptHandler on_accept_;
