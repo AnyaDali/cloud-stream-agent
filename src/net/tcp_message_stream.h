@@ -2,6 +2,7 @@
 
 #include "protocol/message_header.h"
 
+#include <asio/awaitable.hpp>
 #include <asio/ip/tcp.hpp>
 
 #include <cstdint>
@@ -21,5 +22,13 @@ void send_message(asio::ip::tcp::socket& socket, protocol::MessageType type, std
                   std::uint32_t sequence, std::span<const std::uint8_t> payload);
 
 [[nodiscard]] ReceivedMessage receive_message(asio::ip::tcp::socket& socket);
+
+asio::awaitable<void> async_send_message(asio::ip::tcp::socket& socket,
+                                         protocol::MessageType type, std::uint16_t flags,
+                                         std::uint32_t sequence,
+                                         std::span<const std::uint8_t> payload);
+
+[[nodiscard]] asio::awaitable<ReceivedMessage>
+async_receive_message(asio::ip::tcp::socket& socket);
 
 } // namespace cloud_stream::net

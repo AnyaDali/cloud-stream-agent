@@ -17,7 +17,7 @@ facts:
         pointer: CMakeLists.txt
     refresh_recipe: inspect CMAKE_CXX_STANDARD and source files
   - kind: architecture
-    value: Windows Graphics Capture, FFmpeg, SDL3, TCP control plane and UDP video plane
+    value: single capture/encode pipeline, shared multi-client broadcast buffer, TCP control plane and future UDP video plane
     confidence: confirmed
     sources:
       - type: interview

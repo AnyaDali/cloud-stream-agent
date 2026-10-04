@@ -45,8 +45,11 @@ latest-frame. Проверки Windows Graphics Capture будут выполн�
 пять RGB24-кадров и проверяет итоговые метрики и PPM-артефакт. В изолированной
 среде агента тесту может потребоваться разрешение на создание loopback-сокета.
 
-Текущие receive/send операции синхронные. Следующий этап переведёт accept,
-connect, exact read/write и таймеры на `asio::awaitable` и C++20 coroutines.
+Серверные accept, exact read/write и ожидание нового кадра используют
+`asio::awaitable` и C++20 coroutines. Все сетевые session state и cursors пока
+выполняются на одном `io_context`; capture/encode разделены bounded queue и
+отдельным encoder worker. Клиентский connect/read остаётся синхронным до этапа
+UDP receive/reassembly.
 
 ## Секреты
 

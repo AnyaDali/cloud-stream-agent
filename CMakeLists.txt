@@ -47,8 +47,41 @@ target_include_directories(cloud_stream_net PUBLIC src)
 target_link_libraries(cloud_stream_net PUBLIC cloud_stream_protocol cloud_stream_asio)
 cloud_stream_enable_warnings(cloud_stream_net)
 
+add_library(cloud_stream_capture src/capture/synthetic_frame_source.cpp)
+target_include_directories(cloud_stream_capture PUBLIC src)
+target_link_libraries(cloud_stream_capture PUBLIC cloud_stream_asio)
+cloud_stream_enable_warnings(cloud_stream_capture)
+
+add_library(cloud_stream_media src/media/raw_frame_encoder.cpp)
+target_include_directories(cloud_stream_media PUBLIC src)
+target_link_libraries(cloud_stream_media PUBLIC cloud_stream_capture cloud_stream_protocol)
+cloud_stream_enable_warnings(cloud_stream_media)
+
+add_library(cloud_stream_pipeline src/pipeline/broadcast_buffer.cpp)
+target_include_directories(cloud_stream_pipeline PUBLIC src)
+target_link_libraries(cloud_stream_pipeline PUBLIC cloud_stream_media)
+cloud_stream_enable_warnings(cloud_stream_pipeline)
+
+add_library(
+    cloud_stream_server_core
+    src/server/client_acceptor.cpp
+    src/server/client_registry.cpp
+    src/server/client_session.cpp
+    src/server/server_app.cpp
+)
+target_include_directories(cloud_stream_server_core PUBLIC src)
+target_link_libraries(
+    cloud_stream_server_core
+    PUBLIC
+        cloud_stream_capture
+        cloud_stream_media
+        cloud_stream_net
+        cloud_stream_pipeline
+)
+cloud_stream_enable_warnings(cloud_stream_server_core)
+
 add_executable(stream-server src/server/main.cpp)
-target_link_libraries(stream-server PRIVATE cloud_stream_net)
+target_link_libraries(stream-server PRIVATE cloud_stream_server_core)
 cloud_stream_enable_warnings(stream-server)
 
 add_executable(stream-client src/client/main.cpp)

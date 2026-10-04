@@ -3,6 +3,8 @@
 
 #include <asio.hpp>
 
+#include <windows.h>
+
 #include <charconv>
 #include <chrono>
 #include <cstdint>
@@ -14,6 +16,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <system_error>
 
 namespace {
 
@@ -28,10 +31,10 @@ std::uint16_t parse_port(const char* text) {
 }
 
 void atomic_replace(const std::filesystem::path& temporary, const std::filesystem::path& target) {
-    std::error_code error;
-    std::filesystem::rename(temporary, target, error);
-    if (error) {
-        throw std::runtime_error("failed to publish artifact: " + error.message());
+    if (!::MoveFileExW(temporary.c_str(), target.c_str(),
+                       MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(),
+                                "failed to publish artifact");
     }
 }
 
@@ -45,7 +48,9 @@ void write_frame(const std::filesystem::path& output,
         throw std::runtime_error("RAW_RGB24 frame size does not match STREAM_CONFIG");
     }
 
-    std::filesystem::create_directories(output.parent_path());
+    if (!output.parent_path().empty()) {
+        std::filesystem::create_directories(output.parent_path());
+    }
     const auto temporary = output.string() + ".tmp";
     std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
     if (!stream) {
@@ -101,7 +106,9 @@ int main(int argc, char** argv) {
         const std::uint16_t port = argc > 2 ? parse_port(argv[2]) : std::uint16_t{9010};
         const auto output = argc > 3 ? std::filesystem::path(argv[3])
                                      : std::filesystem::temp_directory_path() /
-                                           "cloud-stream-agent" / "latest-frame.ppm";
+                                           "cloud-stream-agent" /
+                                           ("client-" + std::to_string(::GetCurrentProcessId())) /
+                                           "latest-frame.ppm";
 
         asio::io_context context;
         asio::ip::tcp::resolver resolver(context);

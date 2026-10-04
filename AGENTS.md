@@ -36,6 +36,9 @@ build only: do not add or run tests until the user asks to resume test work.
    rather than allowing latency to grow without limit.
 5. Agent answers must cite observable evidence from the client API/artifacts;
    model output alone is not proof that video is flowing.
+6. Capture and encoding happen once per stream. Multiple clients read the same
+   bounded broadcast buffer through independent monotonic cursors; a slow
+   client must never retain the buffer or block other sessions.
 
 ## Safety and compatibility
 
