@@ -1,69 +1,89 @@
-# Сетевой протокол v1
+# Сетевой протокол v2
 
-TCP используется как поток байтов: одно чтение сокета не соответствует одному
-сообщению. Получатель читает ровно 16 байт заголовка, валидирует его, затем
-читает ровно `payload_size` байт. Все многобайтовые числа имеют big-endian
-представление. C++-структуры в сокет напрямую не копируются.
+Протокол разделён на надёжный TCP control plane и UDP video plane. Все
+многобайтовые числа кодируются в big-endian; C++-структуры в сеть напрямую не
+копируются. Один серверный H.264-поток используется всеми клиентами, но каждая
+сессия имеет собственные TCP-состояние, UDP endpoint, `session_id`, счётчик
+пакетов и cursor общего broadcast-буфера.
 
-## Заголовок
+Текущая версия не шифрует трафик. Поле `key_epoch` зарезервировано и равно нулю.
+Случайный `probe_token` связывает UDP endpoint с уже открытым TCP-соединением,
+но не заменяет TLS, аутентификацию или AEAD.
+
+## TCP framing
+
+Получатель читает ровно 16 байт заголовка, валидирует его, затем читает ровно
+`payload_size` байт. Абсолютный предел payload — 8 MiB.
 
 | Смещение | Размер | Поле |
 | ---: | ---: | --- |
 | 0 | 4 | magic `CSTR` |
-| 4 | 1 | версия (`1`) |
+| 4 | 1 | версия (`2`) |
 | 5 | 1 | тип сообщения |
-| 6 | 2 | flags, в v1 всегда `0` |
-| 8 | 4 | полный размер payload |
+| 6 | 2 | flags, сейчас `0` |
+| 8 | 4 | размер payload |
 | 12 | 4 | sequence number |
 
-Абсолютный предел payload — 8 MiB. Sequence ведётся отдельно для каждого
-направления, начинается с нуля и увеличивается на единицу для каждого сообщения,
-включая `HELLO`, `STREAM_CONFIG` и `END`. Пропуск, повтор, уменьшение или
-переполнение sequence считается protocol error.
+Sequence ведётся отдельно для каждого направления, начинается с нуля и строго
+увеличивается на единицу. Каждое TCP-подключение имеет независимые counters.
 
-Каждое TCP-подключение имеет независимую пару sequence counters. Сервер может
-обслуживать несколько клиентов одновременно; клиенты не разделяют control
-state и не видят идентификаторы сообщений других сессий. Внутренний sequence
-общего broadcast-буфера в wire format v1 не передаётся.
+Типы сообщений: `1=HELLO`, `2=UDP_CONFIG`, `3=UDP_READY`,
+`4=STREAM_CONFIG`, `5=REQUEST_KEYFRAME`, `6=PING`, `7=PONG`, `8=ERROR`,
+`9=END`. PING/PONG зарезервированы; текущая реализация их ещё не отправляет.
 
-## Состояния соединения
+## Handshake и состояния
 
 ```text
-client HELLO(sequence=0)
-server HELLO(sequence=0)
-server STREAM_CONFIG
-server VIDEO_PACKET*
-server END
+client -> server: HELLO(sequence=0, H264_ANNEX_B)
+server -> client: HELLO(sequence=0, H264_ANNEX_B)
+server -> client: UDP_CONFIG(sequence=1)
+client -> server: UDP probe
+server -> client: UDP_READY(sequence=2)
+server -> client: STREAM_CONFIG(sequence=3)
+client -> server: REQUEST_KEYFRAME(sequence=1)
+server -> client: UDP video datagrams*
+server -> client: END(sequence=4+)             # штатное завершение
 ```
 
-До `STREAM_CONFIG` видеопакеты запрещены. В v1 повторный `STREAM_CONFIG` не
-поддерживается: изменение разрешения или extradata требует завершить текущий
-поток и создать новую сессию. `ERROR` разрешён в любом состоянии и завершает
-сессию. EOF до `END` считается аварийным обрывом.
+TCP остаётся открытым на всё время сессии. EOF позволяет серверу сразу удалить
+ушедшего клиента. `REQUEST_KEYFRAME` имеет пустой payload и отдельный client
+sequence; сервер может запросить общий encoder создать IDR для восстановления
+конкретного отставшего клиента.
 
-После обмена `HELLO` отправитель ограничивает сообщения значением
-`min(8 MiB, peer.max_payload_size)`. Заголовок `payload_size` включает также
-фиксированный префикс конкретного типа сообщения.
+После handshake клиент запрашивает свежий keyframe и не передаёт P-frames в
+decoder, пока полностью не собран IDR с in-band SPS/PPS. Сервер использует
+увеличенный UDP send buffer и делает паузу 1 ms после каждых 16 datagrams;
+клиент использует увеличенный receive buffer. Это предотвращает потерю
+крупного стартового IDR из-за локального UDP burst.
 
-## HELLO (`type = 1`, ровно 8 байт)
+## TCP payloads
+
+### HELLO — 8 байт
 
 | Смещение | Размер | Поле |
 | ---: | ---: | --- |
 | 0 | 1 | role: `1=server`, `2=client` |
 | 1 | 1 | reserved, `0` |
-| 2 | 2 | capabilities bitmask |
-| 4 | 4 | max payload size |
+| 2 | 2 | capabilities; bit 1 — `H264_ANNEX_B` |
+| 4 | 4 | максимальный TCP payload |
 
-Capabilities v1: bit 0 — `RAW_RGB24`, bit 1 — `H264_ANNEX_B`. Неизвестные биты
-в v1 отвергаются. Значение max payload находится в диапазоне `[29, 8 MiB]`.
-
-## STREAM_CONFIG (`type = 2`, 20 + extradata)
+### UDP_CONFIG — 32 байта
 
 | Смещение | Размер | Поле |
 | ---: | ---: | --- |
-| 0 | 1 | codec: `0=RAW`, `1=H264` |
-| 1 | 1 | pixel format: `0=unspecified`, `1=RGB24`, `2=NV12`, `3=YUV420P` |
-| 2 | 2 | flags, в v1 `0` |
+| 0 | 8 | ненулевой `session_id` |
+| 8 | 16 | случайный `probe_token` |
+| 24 | 2 | UDP port этой серверной сессии |
+| 26 | 2 | максимальный размер UDP datagram, сейчас 1200 |
+| 28 | 4 | `key_epoch`, сейчас строго `0` |
+
+### STREAM_CONFIG — 20 + extradata
+
+| Смещение | Размер | Поле |
+| ---: | ---: | --- |
+| 0 | 1 | codec: `1=H264` |
+| 1 | 1 | pixel format: `0=unspecified` |
+| 2 | 2 | flags, `0` |
 | 4 | 2 | width |
 | 6 | 2 | height |
 | 8 | 4 | time-base numerator |
@@ -71,38 +91,55 @@ Capabilities v1: bit 0 — `RAW_RGB24`, bit 1 — `H264_ANNEX_B`. Неизвес
 | 16 | 4 | extradata length |
 | 20 | N | codec extradata |
 
-Размеры находятся в диапазоне `1..8192`, обе части time base — в
-`1..1_000_000_000`. Для `RAW` разрешена только комбинация `RGB24` без
-extradata. Для закодированного видео pixel format равен `unspecified`: renderer
-использует формат реально декодированного `AVFrame`.
+H.264 передаётся в Annex B. Encoder работает с `repeat-headers=1`, поэтому
+SPS/PPS повторяются in-band с keyframe; текущий `extradata` пуст.
 
-H.264 в v1 передаётся в Annex B. Один `VIDEO_PACKET` содержит одну
-codec-specific data unit, полученную от encoder. Side data не передаётся,
-SPS/PPS повторяются in-band вместе с keyframe. Extradata при наличии также имеет
-Annex B representation. При передаче данных в FFmpeg локальный буфер должен
-иметь `AV_INPUT_BUFFER_PADDING_SIZE` дополнительных нулевых байт; padding не
-передаётся по сети.
+`ERROR` содержит четырёхбайтовый код и до 4096 байт UTF-8. `END`, `UDP_READY`
+и `REQUEST_KEYFRAME` не имеют payload.
 
-## VIDEO_PACKET (`type = 3`, 28 + data)
+## UDP probe — 32 байта
 
 | Смещение | Размер | Поле |
 | ---: | ---: | --- |
-| 0 | 8 | signed PTS в единицах time base |
-| 8 | 8 | signed DTS в единицах time base |
-| 16 | 8 | signed duration; `0` означает unknown |
-| 24 | 2 | flags; bit 0 — keyframe |
-| 26 | 2 | reserved, `0` |
-| 28 | N | codec-specific data, не пустая |
+| 0 | 4 | magic `CSPB` |
+| 4 | 1 | версия (`2`) |
+| 5 | 1 | type (`1`) |
+| 6 | 2 | reserved, `0` |
+| 8 | 8 | `session_id` |
+| 16 | 16 | `probe_token` из UDP_CONFIG |
 
-Для `RAW_RGB24` data — один полный top-down кадр, порядок каналов RGB, без
-padding между строками. Его размер обязан быть равен `width * height * 3`, а
-арифметика проверяется на overflow до выделения памяти.
+Сервер принимает endpoint только при совпадении token, session id и IP-адреса
+TCP peer. Port узнаётся из фактического source endpoint probe.
 
-## ERROR (`type = 4`)
+## UDP video datagram
 
-Первые четыре байта — numeric error code, затем не более 4096 байт UTF-8 без
-завершающего нуля. После `ERROR` отправитель закрывает соединение.
+Размер datagram не превышает согласованные 1200 байт. Заголовок занимает 56
+байт, остаток — фрагмент одного H.264 access unit.
 
-## END (`type = 5`)
+| Смещение | Размер | Поле |
+| ---: | ---: | --- |
+| 0 | 4 | magic `CSVD` |
+| 4 | 1 | версия (`2`) |
+| 5 | 1 | type (`1`) |
+| 6 | 2 | flags; bit 0 — keyframe |
+| 8 | 8 | `session_id` |
+| 16 | 4 | `key_epoch`, сейчас `0` |
+| 20 | 2 | `fragment_index` |
+| 22 | 2 | `fragment_count` |
+| 24 | 8 | монотонный per-session `packet_number` |
+| 32 | 8 | `frame_id` |
+| 40 | 8 | signed PTS |
+| 48 | 4 | полный размер access unit |
+| 52 | 2 | размер фрагмента |
+| 54 | 2 | reserved, `0` |
+| 56 | N | fragment bytes |
 
-Payload отсутствует. Это единственный штатный способ завершения потока.
+Клиент одновременно держит не более трёх незавершённых кадров и удаляет их
+через 250 ms. Полный access unit ограничен 8 MiB. Перед FFmpeg decoder данные
+копируются через `av_new_packet`, который добавляет требуемый
+`AV_INPUT_BUFFER_PADDING_SIZE`.
+
+В следующем crypto-этапе неизменяемый UDP header станет associated data, а
+payload — ciphertext с authentication tag. Ключ будет уникальным для сессии и
+передаваться/выводиться через TLS control plane; nonce будет строиться из
+`key_epoch` и `packet_number`.

@@ -10,6 +10,9 @@ include(CTest)
 
 find_package(Threads REQUIRED)
 find_path(ASIO_INCLUDE_DIR NAMES asio.hpp REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavcodec libavutil libswscale)
+find_package(SDL3 CONFIG REQUIRED)
 
 add_library(cloud_stream_asio INTERFACE)
 target_include_directories(cloud_stream_asio INTERFACE "${ASIO_INCLUDE_DIR}")
@@ -38,6 +41,7 @@ endfunction()
 add_library(cloud_stream_protocol
     src/protocol/message_header.cpp
     src/protocol/stream_payloads.cpp
+    src/protocol/udp_datagram.cpp
 )
 target_include_directories(cloud_stream_protocol PUBLIC src)
 cloud_stream_enable_warnings(cloud_stream_protocol)
@@ -47,17 +51,34 @@ target_include_directories(cloud_stream_net PUBLIC src)
 target_link_libraries(cloud_stream_net PUBLIC cloud_stream_protocol cloud_stream_asio)
 cloud_stream_enable_warnings(cloud_stream_net)
 
-add_library(cloud_stream_capture src/capture/synthetic_frame_source.cpp)
+add_library(cloud_stream_capture
+    src/capture/synthetic_frame_source.cpp
+    src/capture/windows/window_enumerator.cpp
+    src/capture/windows/windows_graphics_capture.cpp
+)
 target_include_directories(cloud_stream_capture PUBLIC src)
 target_link_libraries(cloud_stream_capture PUBLIC cloud_stream_asio)
+target_link_libraries(cloud_stream_capture PRIVATE d3d11 dxgi dwmapi windowsapp)
 cloud_stream_enable_warnings(cloud_stream_capture)
 
-add_library(cloud_stream_media src/media/raw_frame_encoder.cpp)
+add_library(cloud_stream_media
+    src/media/raw_frame_encoder.cpp
+    src/media/ffmpeg/h264_encoder.cpp
+    src/media/ffmpeg/h264_decoder.cpp
+)
 target_include_directories(cloud_stream_media PUBLIC src)
-target_link_libraries(cloud_stream_media PUBLIC cloud_stream_capture cloud_stream_protocol)
+target_link_libraries(
+    cloud_stream_media
+    PUBLIC cloud_stream_capture cloud_stream_protocol
+    PRIVATE PkgConfig::FFMPEG
+)
 cloud_stream_enable_warnings(cloud_stream_media)
 
-add_library(cloud_stream_pipeline src/pipeline/broadcast_buffer.cpp)
+add_library(cloud_stream_pipeline
+    src/pipeline/broadcast_buffer.cpp
+    src/pipeline/frame_reassembler.cpp
+    src/pipeline/udp_packetizer.cpp
+)
 target_include_directories(cloud_stream_pipeline PUBLIC src)
 target_link_libraries(cloud_stream_pipeline PUBLIC cloud_stream_media)
 cloud_stream_enable_warnings(cloud_stream_pipeline)
@@ -85,7 +106,10 @@ target_link_libraries(stream-server PRIVATE cloud_stream_server_core)
 cloud_stream_enable_warnings(stream-server)
 
 add_executable(stream-client src/client/main.cpp)
-target_link_libraries(stream-client PRIVATE cloud_stream_net)
+target_link_libraries(
+    stream-client
+    PRIVATE cloud_stream_media cloud_stream_net cloud_stream_pipeline SDL3::SDL3
+)
 cloud_stream_enable_warnings(stream-client)
 
 if(BUILD_TESTING)

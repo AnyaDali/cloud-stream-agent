@@ -1,78 +1,115 @@
 # Cloud Stream Agent
 
-Тестовое задание: собственный клиент-серверный видеостриминг и агентская система,
-которая проверяет поступление кадров, описывает последний кадр и сообщает метрики
-потока.
+Windows-only C++20 демонстрация собственного клиент-серверного видеостриминга.
+Сервер захватывает явно выбранное окно через Windows Graphics Capture, один раз
+кодирует поток в H.264 и рассылает его нескольким клиентам по UDP. Клиент
+собирает фрагменты, программно декодирует H.264 через FFmpeg, показывает кадры
+через SDL3 и сохраняет наблюдаемые artifacts.
 
-Проект ориентирован на Windows 10/11 x64. Захват выбранного окна будет
-реализован через Windows Graphics Capture, кодирование и декодирование — через
-FFmpeg, показ видео — через SDL3. TCP используется для управления сессией,
-видеоданные будут передаваться по собственному протоколу поверх UDP.
+## Архитектура текущего среза
 
-## Текущее состояние
+```text
+выбранное HWND -> WGC/D3D11 -> bounded raw queue -> libx264
+    -> общий bounded BroadcastBuffer
+    -> независимые ClientSession/cursor -> UDP packetizer -> клиент
 
-Работает первый многоклиентский сетевой срез: coroutine accept loop принимает до
-восьми клиентов, сервер генерирует движущиеся RGB24-кадры и передаёт их по
-собственному бинарному протоколу поверх TCP. Кадр хранится один раз в общем
-ограниченном broadcast-буфере, а каждая клиентская сессия читает его своим
-cursor. Клиент валидирует поток, считает базовые метрики и атомарно сохраняет
-последний кадр вне репозитория.
+UDP -> bounded reassembler -> FFmpeg decoder -> SDL3
+                                      `-> latest-frame.ppm + stream-metrics.json
+```
 
-Захват окна, H.264, SDL3-рендеринг и агентский harness добавляются следующими
-итерациями.
+TCP используется как control plane: HELLO, привязка UDP endpoint,
+STREAM_CONFIG, завершение и контроль жизни клиента. Захват и кодирование общие,
+но у каждой сессии собственные TCP-состояние, UDP endpoint, `session_id`, cursor
+и packet counter. Это позволяет в следующей итерации добавить уникальный
+per-client ключ и AEAD непосредственно перед UDP send без повторного H.264
+кодирования.
 
-## Подготовка окружения Windows
+Шифрования в текущей версии ещё нет: `key_epoch` равен нулю, а `probe_token`
+только связывает UDP endpoint с TCP-сессией. Пока поток следует использовать в
+доверенной локальной сети.
 
-Установить [MSYS2](https://www.msys2.org/) в стандартный каталог `C:\msys64`,
-открыть **MSYS2 UCRT64** и установить минимальный toolchain:
+## Подготовка Windows
+
+Установить [MSYS2](https://www.msys2.org/) в `C:\msys64`, открыть
+**MSYS2 UCRT64** и выполнить:
 
 ```sh
 pacman -S --needed mingw-w64-ucrt-x86_64-gcc \
   mingw-w64-ucrt-x86_64-cmake \
   mingw-w64-ucrt-x86_64-ninja \
-  mingw-w64-ucrt-x86_64-asio
+  mingw-w64-ucrt-x86_64-asio \
+  mingw-w64-ucrt-x86_64-cppwinrt \
+  mingw-w64-ucrt-x86_64-ffmpeg \
+  mingw-w64-ucrt-x86_64-sdl3
 ```
 
-Проверить окружение без изменения системы можно из PowerShell:
+Read-only проверка окружения из PowerShell:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .agents/scripts/preflight.ps1
 ```
 
-## Сборка и тесты
+## Сборка
 
-Команды выполняются в **MSYS2 UCRT64** из корня репозитория:
+В **MSYS2 UCRT64** из корня репозитория:
 
 ```sh
 cmake --preset debug
 cmake --build --preset debug --target stream-server stream-client
 ```
 
-Текущий этап проверяет только сборку `stream-server.exe` и
-`stream-client.exe`. Автоматические тесты временно не запускаются и новые тесты
-не добавляются до отдельного согласования.
+Текущий milestone проверяет сборку executable и ручной local stream smoke.
+Автоматические тесты временно не запускаются и новые тесты не добавляются до
+отдельного согласования.
 
-Запуск текущих приложений:
+## Запуск
 
-```sh
-./build/debug/stream-server.exe 9010 120 33 0.0.0.0 8
-./build/debug/stream-client.exe 127.0.0.1 9010 \
-  "$LOCALAPPDATA/cloud-stream-agent/latest-frame.ppm"
+При запуске из PowerShell сначала добавить runtime DLL MSYS2 в `PATH`:
+
+```powershell
+cd C:\Users\annadali\projects\cloud-stream-agent
+$env:Path = "C:\msys64\ucrt64\bin;$env:Path"
 ```
 
-Аргументы сервера: `port`, число кадров, интервал между ними в миллисекундах,
-bind address и максимальное число клиентов. По умолчанию сервер слушает только
-loopback и принимает до восьми одновременных клиентов. Synthetic source
-запускается после handshake первого клиента; поздние клиенты начинают с
-последнего доступного независимо декодируемого кадра.
-Метрики клиента сохраняются рядом с кадром в `stream-metrics.json`.
+Получить список доступных окон:
 
-Захват окна, H.264, UDP video plane и SDL3 пока не реализованы. На текущем этапе
-сервер генерирует synthetic RGB24-кадры и передаёт их клиенту по TCP.
+```powershell
+.\build\debug\stream-server.exe --list-windows
+```
+
+Запустить сервер с явным HWND из списка:
+
+```powershell
+.\build\debug\stream-server.exe `
+  --window-id 0x123456 `
+  --tcp-port 9010 `
+  --bind 127.0.0.1 `
+  --max-clients 8 `
+  --width 1280 `
+  --height 720 `
+  --fps 30 `
+  --bitrate-kbps 4000
+```
+
+Вместо id можно передать `--window-title TEXT`, только если подстрока находит
+ровно одно окно. Неявный захват desktop или первого попавшегося окна запрещён.
+
+Каждый клиент запускается отдельно:
+
+```powershell
+.\build\debug\stream-client.exe 127.0.0.1 9010 `
+  .\artifacts\client-1\latest-frame.ppm
+```
+
+Можно запустить до восьми клиентов. Закрытие SDL-окна штатно завершает клиента;
+сервер замечает закрытие TCP control channel и удаляет только его сессию.
+Клиент после handshake запрашивает свежий IDR и ждёт полного keyframe с SPS/PPS,
+поэтому подключение к уже идущему потоку не зависит от ранее отправленных
+H.264-пакетов.
 
 ## Документация
 
 - [Архитектура](.agents/docs/architecture.md)
-- [Протокол](.agents/docs/protocol.md)
+- [Протокол v2](.agents/docs/protocol.md)
 - [Разработка и проверки](.agents/docs/development.md)
 - [Карта кодовой базы](.agents/docs/codebase-map.md)

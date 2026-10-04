@@ -15,16 +15,19 @@ ServerApp::ServerApp(ServerConfig config)
     : config_(std::move(config)), signals_(context_, SIGINT, SIGTERM),
       broadcast_buffer_(config_.broadcast_maximum_frames, config_.broadcast_maximum_bytes),
       raw_frame_queue_(config_.raw_frame_queue_capacity),
-      encoder_(kFrameWidth, kFrameHeight, config_.interval_ms),
-      source_(context_.get_executor(),
-              {
-                  .width = kFrameWidth,
-                  .height = kFrameHeight,
-                  .frame_count = config_.frame_count,
-                  .interval_ms = config_.interval_ms,
-              }),
+      encoder_({
+          .width = config_.video_width,
+          .height = config_.video_height,
+          .frames_per_second = config_.frames_per_second,
+          .bitrate_kbps = config_.bitrate_kbps,
+          .keyframe_interval = config_.frames_per_second,
+      }),
+      source_({
+          .window_id = config_.window_id,
+          .maximum_frames_per_second = config_.frames_per_second,
+      }),
       client_registry_(context_.get_executor(), broadcast_buffer_, encoder_.stream_config(),
-                       config_.maximum_clients, [this] { start_source(); },
+                       config_.maximum_clients, [this] { encoder_.request_keyframe(); },
                        [this] { encoder_.request_keyframe(); }),
       client_acceptor_(
           context_.get_executor(),
@@ -45,11 +48,15 @@ int ServerApp::run() {
     std::cout << "listening_on=" << endpoint.address().to_string() << ':' << endpoint.port()
               << '\n'
               << "max_clients=" << config_.maximum_clients << '\n'
+              << "capture_window_id=0x" << std::hex << config_.window_id << std::dec << '\n'
+              << "video=" << config_.video_width << 'x' << config_.video_height << '@'
+              << config_.frames_per_second << " codec=h264 transport=udp\n"
               << std::flush;
 
     encoder_thread_ = std::thread([this] { encoder_loop(); });
     client_registry_.start();
     client_acceptor_.start();
+    start_source();
     signals_.async_wait([this](const std::error_code& error, const int signal) {
         if (!error) {
             std::cout << "shutdown_signal=" << signal << '\n';
@@ -81,7 +88,13 @@ void ServerApp::encoder_loop() {
     try {
         capture::RawFrame frame;
         while (raw_frame_queue_.wait_pop(frame)) {
-            auto encoded = encoder_.encode(std::move(frame));
+            auto encoded_frames = encoder_.encode(std::move(frame));
+            for (auto& encoded : encoded_frames) {
+                asio::post(context_,
+                           [this, encoded = std::move(encoded)] { publish_frame(encoded); });
+            }
+        }
+        for (auto& encoded : encoder_.flush()) {
             asio::post(context_,
                        [this, encoded = std::move(encoded)] { publish_frame(encoded); });
         }

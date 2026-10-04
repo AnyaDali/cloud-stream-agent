@@ -12,7 +12,7 @@
   -> собственный протокол / UDP
   -> FFmpeg decoder
   -> SDL3 renderer
-  -> метрики + latest-frame.jpg
+  -> метрики + latest-frame.ppm
   -> локальный API клиента
   -> agent harness + мультимодальная LLM
 ```
@@ -36,10 +36,12 @@
 при отставании от начала буфера он пропускает данные до следующего keyframe.
 
 `ClientAcceptor` непрерывно выполняет asynchronous accept и создаёт независимые
-coroutine-сессии. На текущем этапе поддерживается до восьми клиентов с одним
-общим профилем потока. TCP используется для control plane, UDP — для будущего
-video plane. Текущий synthetic-срез пока передаёт RAW_RGB24 по TCP и будет
-заменён после фиксации protocol v2.
+coroutine-сессии. Поддерживается до восьми клиентов с одним общим профилем
+потока. TCP используется для handshake, управления жизненным циклом и будущего
+TLS; H.264 Annex B передаётся фрагментами по UDP. У каждой `ClientSession` свой
+UDP endpoint, `session_id`, 64-битный packet counter и cursor. Поэтому будущая
+персональная криптография добавляется в session sender и не требует повторного
+кодирования кадра.
 
 Жизненным циклом клиентов управляет явный `ClientRegistry::event_loop`.
 `ClientAcceptor` отправляет событие `ClientConnected`, а сессии — события
@@ -49,11 +51,15 @@ video plane. Текущий synthetic-срез пока передаёт RAW_RGB
 stopped`.
 
 ```text
-SyntheticFrameSource / WindowsGraphicsCapture
+WindowsGraphicsCaptureSource
   -> BoundedLatestQueue<RawFrame>
-  -> FrameEncoder
+  -> H264Encoder (libx264, один раз на поток)
   -> BroadcastBuffer<EncodedFrame>
   -> ClientSession cursor #1..N
+  -> UdpPacketizer (per-session header; далее здесь появится AEAD)
+  -> UDP
+
+UDP -> FrameReassembler -> H264Decoder -> SDL3 + latest-frame.ppm
 ```
 
 ## Этапы реализации
@@ -62,10 +68,28 @@ SyntheticFrameSource / WindowsGraphicsCapture
 2. TCP server/client и синтетические изображения. — готово
 3. Windows baseline: MSYS2 UCRT64 и сборка двух executable. — готово
 4. Компонентный server pipeline, multi-client accept и общий broadcast buffer. — готово
-5. Async TCP control plane на C++20 coroutines и Asio. — частично готово
-6. Synthetic H.264 через UDP.
-7. FFmpeg encode/decode и SDL3 renderer.
-8. Windows Graphics Capture с явным выбором окна.
+5. Async TCP control plane на C++20 coroutines и Asio. — готово
+6. H.264 Annex B и UDP video plane. — готово
+7. FFmpeg encode/decode и SDL3 renderer. — готово
+8. Windows Graphics Capture с явным выбором окна. — готово
 9. Локальный API, latest-frame и агентские tools/evals.
+
+## Потоки выполнения
+
+- WGC `CreateFreeThreaded` получает BGRA-кадры и кладёт их в bounded
+  latest-wins очередь ёмкостью два кадра.
+- Единственный encoder worker масштабирует кадр к фиксированному профилю и
+  кодирует libx264 с `zerolatency`, `max_b_frames=0` и периодическим IDR.
+- Один Asio `io_context` обслуживает TCP accept, registry event loop и все
+  клиентские TCP/UDP coroutine. Медленный клиент пропускает старые записи до
+  keyframe и не блокирует encoder или другие сессии.
+- На клиенте network worker делает reassembly, decoder worker вызывает FFmpeg,
+  а главный поток владеет SDL window/renderer/texture.
+- UDP sender ограничивает размер burst, а клиент начинает декодирование только
+  с полностью собранного keyframe. Ошибка decoder сбрасывает codec state и
+  возвращает клиента в ожидание следующего IDR вместо завершения процесса.
+
+Захват начинается при старте сервера и требует явный `--window-id` либо
+однозначный `--window-title`; полный desktop не выбирается неявно.
 
 Переход к следующему этапу делается только после исполняемой проверки текущего.

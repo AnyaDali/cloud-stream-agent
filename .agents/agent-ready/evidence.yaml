@@ -17,7 +17,7 @@ facts:
         pointer: CMakeLists.txt
     refresh_recipe: inspect CMAKE_CXX_STANDARD and source files
   - kind: architecture
-    value: single capture/encode pipeline, shared multi-client broadcast buffer, TCP control plane and future UDP video plane
+    value: Windows Graphics Capture and one H.264 encoder feed a shared multi-client broadcast buffer; TCP is the control plane and UDP is the video plane
     confidence: confirmed
     sources:
       - type: interview

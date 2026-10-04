@@ -6,11 +6,11 @@
 | --- | --- |
 | `src/protocol/` | Версионируемый бинарный wire format и его валидация |
 | `src/net/` | Exact read/write сообщений поверх TCP и настройки сокета |
-| `src/capture/` | Модели кадров и текущий synthetic source; WGC будет в `windows/` |
-| `src/media/` | Граница encoder-а и текущая RAW_RGB24 реализация |
-| `src/pipeline/` | Bounded latest-frame queue и общий multi-reader broadcast buffer |
+| `src/capture/windows/` | Перечень окон и Windows Graphics Capture через C++/WinRT + D3D11 |
+| `src/media/ffmpeg/` | libx264 encoder и программный H.264 decoder/converter |
+| `src/pipeline/` | Bounded queues, общий broadcast buffer, UDP packetizer/reassembler |
 | `src/server/` | ServerApp, coroutine accept, registry и независимые client sessions |
-| `src/client/` | Точка входа клиента; далее receive/decode/render/metrics |
+| `src/client/` | TCP/UDP receive, decoder worker, SDL3 render и PPM/JSON artifacts |
 | `tests/protocol/` | Исполняемые проверки framing и защитных ограничений |
 | `tests/integration/` | Loopback-проверка двух реальных процессов и артефактов |
 | `.agents/docs/` | Архитектура, протокол и воспроизводимые команды |
@@ -18,8 +18,6 @@
 
 Запланированные области создаются только вместе с рабочим кодом:
 
-- `src/capture/windows/` — Windows Graphics Capture и выбор окна;
-- `src/media/ffmpeg/` — H.264 encoder/decoder через FFmpeg;
 - `src/observability/` — метрики и локальный API клиента;
 - `agent/` — harness, tools и evals.
 

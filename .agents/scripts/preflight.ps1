@@ -74,7 +74,7 @@ $report = [ordered]@{
     }
     capabilities = $capabilities
     next = [ordered]@{
-        install = 'pacman -S --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-asio'
+        install = 'pacman -S --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-asio mingw-w64-ucrt-x86_64-cppwinrt mingw-w64-ucrt-x86_64-ffmpeg mingw-w64-ucrt-x86_64-sdl3'
         configure = 'cmake --preset debug'
         build = 'cmake --build --preset debug --target stream-server stream-client'
         test = 'deferred by current milestone'

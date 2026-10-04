@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -9,6 +11,7 @@
 namespace cloud_stream::protocol {
 
 inline constexpr std::size_t kHelloPayloadSize = 8;
+inline constexpr std::size_t kUdpConfigPayloadSize = 32;
 inline constexpr std::size_t kStreamConfigBaseSize = 20;
 inline constexpr std::size_t kVideoPacketBaseSize = 28;
 inline constexpr std::uint16_t kMaxVideoDimension = 8192;
@@ -49,6 +52,16 @@ struct HelloPayload {
     friend bool operator==(const HelloPayload&, const HelloPayload&) = default;
 };
 
+struct UdpConfigPayload {
+    std::uint64_t session_id{0};
+    std::array<std::uint8_t, 16> probe_token{};
+    std::uint16_t server_port{0};
+    std::uint16_t maximum_datagram_size{0};
+    std::uint32_t key_epoch{0};
+
+    friend bool operator==(const UdpConfigPayload&, const UdpConfigPayload&) = default;
+};
+
 struct StreamConfigPayload {
     VideoCodec codec{VideoCodec::raw};
     PixelFormat pixel_format{PixelFormat::rgb24};
@@ -81,6 +94,11 @@ struct ErrorPayload {
 
 [[nodiscard]] std::optional<std::vector<std::uint8_t>> encode_hello(const HelloPayload& payload);
 [[nodiscard]] std::optional<HelloPayload> decode_hello(std::span<const std::uint8_t> bytes);
+
+[[nodiscard]] std::optional<std::vector<std::uint8_t>>
+encode_udp_config(const UdpConfigPayload& payload);
+[[nodiscard]] std::optional<UdpConfigPayload>
+decode_udp_config(std::span<const std::uint8_t> bytes);
 
 [[nodiscard]] std::optional<std::vector<std::uint8_t>>
 encode_stream_config(const StreamConfigPayload& payload);

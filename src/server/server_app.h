@@ -1,8 +1,8 @@
 #pragma once
 
 #include "capture/raw_frame.h"
-#include "capture/synthetic_frame_source.h"
-#include "media/raw_frame_encoder.h"
+#include "capture/windows/windows_graphics_capture.h"
+#include "media/ffmpeg/h264_encoder.h"
 #include "pipeline/bounded_latest_queue.h"
 #include "pipeline/broadcast_buffer.h"
 #include "server/client_acceptor.h"
@@ -22,8 +22,11 @@ namespace cloud_stream::server {
 struct ServerConfig {
     std::string bind_address{"127.0.0.1"};
     std::uint16_t port{9010};
-    std::uint32_t frame_count{120};
-    std::uint32_t interval_ms{33};
+    std::uintptr_t window_id{0};
+    std::uint16_t video_width{1280};
+    std::uint16_t video_height{720};
+    std::uint32_t frames_per_second{30};
+    std::uint32_t bitrate_kbps{4000};
     std::size_t maximum_clients{8};
     std::size_t raw_frame_queue_capacity{2};
     std::size_t broadcast_maximum_frames{120};
@@ -47,16 +50,13 @@ private:
     void finish_stream();
     void stop();
 
-    static constexpr std::uint16_t kFrameWidth = 320;
-    static constexpr std::uint16_t kFrameHeight = 180;
-
     ServerConfig config_;
     asio::io_context context_;
     asio::signal_set signals_;
     pipeline::BroadcastBuffer broadcast_buffer_;
     pipeline::BoundedLatestQueue<capture::RawFrame> raw_frame_queue_;
-    media::RawFrameEncoder encoder_;
-    capture::SyntheticFrameSource source_;
+    media::H264Encoder encoder_;
+    capture::windows::WindowsGraphicsCaptureSource source_;
     ClientRegistry client_registry_;
     ClientAcceptor client_acceptor_;
     std::thread encoder_thread_;
