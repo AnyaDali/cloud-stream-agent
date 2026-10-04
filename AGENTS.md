@@ -39,6 +39,9 @@ build only: do not add or run tests until the user asks to resume test work.
 6. Capture and encoding happen once per stream. Multiple clients read the same
    bounded broadcast buffer through independent monotonic cursors; a slow
    client must never retain the buffer or block other sessions.
+7. Client lifecycle transitions and mutations of the session registry happen
+   only in `ClientRegistry::event_loop`; producers communicate with it through
+   explicit events.
 
 ## Safety and compatibility
 

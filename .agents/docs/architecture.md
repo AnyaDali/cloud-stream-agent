@@ -41,6 +41,13 @@ coroutine-сессии. На текущем этапе поддерживает�
 video plane. Текущий synthetic-срез пока передаёт RAW_RGB24 по TCP и будет
 заменён после фиксации protocol v2.
 
+Жизненным циклом клиентов управляет явный `ClientRegistry::event_loop`.
+`ClientAcceptor` отправляет событие `ClientConnected`, а сессии — события
+`ClientReady` и `ClientDisconnected`. Тот же цикл обрабатывает появление данных,
+завершение потока и остановку сервера. Только event loop добавляет и удаляет
+элементы из registry и выполняет переходы `running -> finishing/stopping ->
+stopped`.
+
 ```text
 SyntheticFrameSource / WindowsGraphicsCapture
   -> BoundedLatestQueue<RawFrame>

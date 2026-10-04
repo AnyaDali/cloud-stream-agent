@@ -48,6 +48,7 @@ int ServerApp::run() {
               << std::flush;
 
     encoder_thread_ = std::thread([this] { encoder_loop(); });
+    client_registry_.start();
     client_acceptor_.start();
     signals_.async_wait([this](const std::error_code& error, const int signal) {
         if (!error) {
@@ -110,7 +111,7 @@ void ServerApp::finish_stream() {
     stream_finished_ = true;
     broadcast_buffer_.finish();
     client_acceptor_.stop();
-    client_registry_.notify_data_available();
+    client_registry_.finish_stream();
     std::error_code ignored;
     signals_.cancel(ignored);
     std::cout << "stream_finished frames_published=" << broadcast_buffer_.next_sequence()
