@@ -11,8 +11,9 @@ public:
     RawFrameEncoder(std::uint16_t width, std::uint16_t height, std::uint32_t interval_ms);
 
     [[nodiscard]] const protocol::StreamConfigPayload& stream_config() const noexcept override;
-    [[nodiscard]] std::shared_ptr<const EncodedFrame>
+    [[nodiscard]] std::vector<std::shared_ptr<const EncodedFrame>>
     encode(capture::RawFrame frame) override;
+    [[nodiscard]] std::vector<std::shared_ptr<const EncodedFrame>> flush() override;
     void request_keyframe() override;
 
 private:

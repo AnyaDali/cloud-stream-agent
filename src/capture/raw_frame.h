@@ -7,6 +7,7 @@ namespace cloud_stream::capture {
 
 enum class PixelFormat : std::uint8_t {
     rgb24 = 1,
+    bgra32 = 2,
 };
 
 struct RawFrame {

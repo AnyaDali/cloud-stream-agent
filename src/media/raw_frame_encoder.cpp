@@ -27,30 +27,24 @@ const protocol::StreamConfigPayload& RawFrameEncoder::stream_config() const noex
     return stream_config_;
 }
 
-std::shared_ptr<const EncodedFrame> RawFrameEncoder::encode(capture::RawFrame frame) {
+std::vector<std::shared_ptr<const EncodedFrame>> RawFrameEncoder::encode(capture::RawFrame frame) {
     if (frame.pixel_format != capture::PixelFormat::rgb24 ||
         frame.width != stream_config_.width || frame.height != stream_config_.height) {
         throw std::runtime_error("captured frame does not match RAW encoder configuration");
     }
     const auto pts = frame.capture_timestamp_ms;
-    auto payload = protocol::encode_video_packet({
-        .pts = pts,
-        .dts = pts,
-        .duration = interval_ms_,
-        .flags = protocol::video_packet_keyframe,
-        .data = std::move(frame.pixels),
-    });
-    if (!payload) {
-        throw std::runtime_error("failed to encode RAW frame payload");
-    }
-
-    return std::make_shared<const EncodedFrame>(EncodedFrame{
+    auto encoded = std::make_shared<const EncodedFrame>(EncodedFrame{
         .frame_id = frame.frame_id,
         .pts = pts,
         .keyframe = true,
         .config_revision = 0,
-        .payload = std::make_shared<const std::vector<std::uint8_t>>(std::move(*payload)),
+        .payload = std::make_shared<const std::vector<std::uint8_t>>(std::move(frame.pixels)),
     });
+    return {std::move(encoded)};
+}
+
+std::vector<std::shared_ptr<const EncodedFrame>> RawFrameEncoder::flush() {
+    return {};
 }
 
 void RawFrameEncoder::request_keyframe() {

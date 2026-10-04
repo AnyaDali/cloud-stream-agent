@@ -2,6 +2,7 @@
 
 #include "protocol/message_header.h"
 
+#include <algorithm>
 #include <bit>
 #include <limits>
 
@@ -139,6 +140,40 @@ std::optional<HelloPayload> decode_hello(const std::span<const std::uint8_t> byt
         .max_payload_size = read_u32(bytes.subspan<4, 4>()),
     };
     return encode_hello(result).has_value() ? std::optional{result} : std::nullopt;
+}
+
+std::optional<std::vector<std::uint8_t>> encode_udp_config(const UdpConfigPayload& payload) {
+    constexpr std::uint16_t kMinimumDatagramSize = 256;
+    constexpr std::uint16_t kMaximumDatagramSize = 1472;
+    if (payload.session_id == 0 || payload.server_port == 0 ||
+        payload.maximum_datagram_size < kMinimumDatagramSize ||
+        payload.maximum_datagram_size > kMaximumDatagramSize || payload.key_epoch != 0) {
+        return std::nullopt;
+    }
+
+    std::vector<std::uint8_t> result;
+    result.reserve(kUdpConfigPayloadSize);
+    append_u64(result, payload.session_id);
+    result.insert(result.end(), payload.probe_token.begin(), payload.probe_token.end());
+    append_u16(result, payload.server_port);
+    append_u16(result, payload.maximum_datagram_size);
+    append_u32(result, payload.key_epoch);
+    return result;
+}
+
+std::optional<UdpConfigPayload> decode_udp_config(const std::span<const std::uint8_t> bytes) {
+    if (bytes.size() != kUdpConfigPayloadSize) {
+        return std::nullopt;
+    }
+    UdpConfigPayload result{
+        .session_id = read_u64(bytes.subspan<0, 8>()),
+        .probe_token = {},
+        .server_port = read_u16(bytes.subspan<24, 2>()),
+        .maximum_datagram_size = read_u16(bytes.subspan<26, 2>()),
+        .key_epoch = read_u32(bytes.subspan<28, 4>()),
+    };
+    std::copy_n(bytes.begin() + 8, result.probe_token.size(), result.probe_token.begin());
+    return encode_udp_config(result).has_value() ? std::optional{result} : std::nullopt;
 }
 
 std::optional<std::vector<std::uint8_t>> encode_stream_config(const StreamConfigPayload& payload) {
